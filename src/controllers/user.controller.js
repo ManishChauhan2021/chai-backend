@@ -55,7 +55,7 @@ const registerUser = asyncHandler(async (req, res) => {
    // const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
    let coverImageLocalPath;
-   if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+   if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
       coverImageLocalPath = req.files.coverImage[0].path
    }
 
@@ -129,18 +129,18 @@ const loginUser = asyncHandler(async (req, res) => {
    }
 
    return res
-   .status(200)
-   .cookie("accessToken", acccessToken, options)
-   .cookie("refreshToken", refreshToken, options)
-   .json(
-      new ApiResponse(
-         200,
-         {
-            user: loggedInUser, acccessToken, refreshToken
-         },
-         "User logged in Successfully"
+      .status(200)
+      .cookie("accessToken", acccessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json(
+         new ApiResponse(
+            200,
+            {
+               user: loggedInUser, acccessToken, refreshToken
+            },
+            "User logged in Successfully"
+         )
       )
-   )
 
 })
 
@@ -157,16 +157,16 @@ const logoutUser = asyncHandler(async (req, res) => {
       }
    )
 
-      const options = {
+   const options = {
       httpOnly: true,
       secure: true
    }
 
    return res
-   .status(200)
-   .clearCookie("accessToken", options)
-   .clearCookie("refreshToken", options)
-   .json(new ApiResponse(200, {}, "User logged Out"))
+      .status(200)
+      .clearCookie("accessToken", options)
+      .clearCookie("refreshToken", options)
+      .json(new ApiResponse(200, {}, "User logged Out"))
 })
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
@@ -176,27 +176,50 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       throw new ApiError(401, "unauthorized request")
    }
 
-   const decodedToken = jwt.verify(
-      incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET
-   )
+   try {
+      const decodedToken = jwt.verify(
+         incomingRefreshToken,
+         process.env.REFRESH_TOKEN_SECRET
+      )
 
-   const user = await User.findById(decodedToken?._id)
+      const user = await User.findById(decodedToken?._id)
 
-   if (!user) {
-      throw new ApiError(401, "Invalid refresh token")
+      if (!user) {
+         throw new ApiError(401, "Invalid refresh token")
+      }
+
+      if (incomingRefreshToken !== user?.refreshToken) {
+         throw new ApiError(401, "Refresh token is expired or used")
+
+      }
+
+      const options = {
+         httpOnly: true,
+         secure: true
+      }
+
+      const { acccessToken, newRefreshToken } = await generateAccessAndRefereshToken(user._id)
+
+      return res
+         .status(200)
+         .cookie("accessToken", acccessToken, options)
+         .cookie("refreshToken", newRefreshToken, options)
+         .json(
+            new ApiResponse(
+               200,
+               { acccessToken, refreshToken: newRefreshToken },
+               "Access token refreshed"
+            )
+         )
+   } catch (error) {
+      throw new ApiError(401, error?.message || "Invalid refresh token")
    }
-
-   if (incomingRefreshToken !== user?.refreshToken) {
-      throw new ApiError(401, "Refresh token is expired or used")
-   }
-
-   
 
 })
 
 export {
    registerUser,
    loginUser,
-   logoutUser
+   logoutUser,
+   refreshAccessToken
 }
