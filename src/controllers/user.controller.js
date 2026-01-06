@@ -3,7 +3,7 @@ import { ApiError } from "../utils/ApiErrors.js";
 import { User } from "../models/user.model.js";
 import { uploadPOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
-
+import jwt from "jsonwebtoken";
 
 const generateAccessAndRefereshToken = async (userId) => {
    try {
@@ -21,8 +21,6 @@ const generateAccessAndRefereshToken = async (userId) => {
       throw new ApiError(500, "something went wrong while generating refresh and access token")
    }
 }
-
-
 
 const registerUser = asyncHandler(async (req, res) => {
    // get user details from frontend
@@ -54,7 +52,12 @@ const registerUser = asyncHandler(async (req, res) => {
    }
 
    const avatarLocalPath = req.files?.avatar[0]?.path;
-   const coverImageLocalPath = req.files?.coverImage[0]?.path;
+   // const coverImageLocalPath = req.files?.coverImage[0]?.path;
+
+   let coverImageLocalPath;
+   if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0){
+      coverImageLocalPath = req.files.coverImage[0].path
+   }
 
    if (!avatarLocalPath) {
       throw new ApiError(400, "Avatar file is required")
@@ -98,7 +101,7 @@ const loginUser = asyncHandler(async (req, res) => {
    // send cookie
 
    const { email, username, password } = req.body
-   if (!username || !email) {
+   if (!username && !email) {
       throw new ApiError(400, "username or email is required")
    }
 
@@ -141,7 +144,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
 })
 
-const logoutUser = asyncHandler(async(req, res) => {
+const logoutUser = asyncHandler(async (req, res) => {
    await user.findByIdAndUpdate(
       req.user._id,
       {
@@ -164,6 +167,32 @@ const logoutUser = asyncHandler(async(req, res) => {
    .clearCookie("accessToken", options)
    .clearCookie("refreshToken", options)
    .json(new ApiResponse(200, {}, "User logged Out"))
+})
+
+const refreshAccessToken = asyncHandler(async (req, res) => {
+   const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+
+   if (incomingRefreshToken) {
+      throw new ApiError(401, "unauthorized request")
+   }
+
+   const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+   )
+
+   const user = await User.findById(decodedToken?._id)
+
+   if (!user) {
+      throw new ApiError(401, "Invalid refresh token")
+   }
+
+   if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(401, "Refresh token is expired or used")
+   }
+
+   
+
 })
 
 export {
